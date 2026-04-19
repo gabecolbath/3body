@@ -7,6 +7,12 @@ GRAV_CONST = 5
 DT_BASE = 1
 SOFTENING = 2
 
+TONES = [
+    0xff0000,
+    0x00ff00,
+    0x0000ff,
+]
+
 
 @dataclass
 class Vec:
@@ -127,7 +133,7 @@ class Body:
     acc: Vec
     mass: float
     rad: float
-    tone: str
+    tone: int
 
 
 @dataclass
@@ -172,6 +178,18 @@ class Simulation:
         self.bodies = []
         self.stars = []
         self.shooters = []
+
+
+    def init_bodies(self, bounds: tuple[int, int]) -> None:
+        for i in range(3):
+            self.bodies.append(Body(
+                pos=Vec.rand((0, bounds[1]), (0, bounds[0])),
+                vel=Vec.zeros(),
+                acc=Vec.zeros(),
+                mass=1,
+                rad=7,
+                tone=TONES[i],
+            ))
 
 
     def update(self) -> None:

@@ -1,109 +1,134 @@
-import math
-import random
 import numpy as np
+from time import time
 
-from rich.style import Style
+from display import Display
+from render import Renderer
+from sim import Simulation
+
+
 from textual.app import App, ComposeResult
-from src.sim import Vec, Simulation, Body, Star
-from src.rendering.renderer import SimulationRenderer
-
 from textual.widget import Widget
 from textual.events import Resize
 from textual.strip import Strip
 from rich.segment import Segment
+from rich.style import Style
 
 
-AVG_DIST_BETWEEN_STARS = 3
 
-
-def initialize_bodies(size: tuple[int, int]) -> list[Body]:
-    colors = [
-        '#ff0000',
-        '#00ff00',
-        '#0000ff',
-    ]
-    bodies = []
-    for i in range(3):
-        bodies.append(Body(
-            pos=Vec.rand((0, size[1]), (0, size[0])),
-            vel=Vec.zeros(),
-            acc=Vec.zeros(),
-            mass=1,
-            rad=7,
-            tone=colors[i],
-        ))
-    return bodies
-
-
-def initialize_stars(size: tuple[int, int]) -> list[Star]:
-    n = int((size[0] * size[1]) // (AVG_DIST_BETWEEN_STARS**2))
-    return [Star(
-        pos=Vec.rand((0, size[1]), (0, size[0])),
-        lum=random.uniform(0, 1),
-        size=random.uniform(0, 1),
-        twinkle=Star.Twinkle(
-            amplitude=0.25,
-            speed=1,
-            phase=random.uniform(0, math.pi),
-            shine=0,
-        )
-    ) for _ in range(n)]
+FPS = 60
 
 
 class SimulationWidget(Widget):
     sim: Simulation
-    rend: SimulationRenderer
-    _initialized_size: bool = False
+    rend: Renderer
+    view: tuple[np.ndarray, np.ndarray]
+    started: bool
+    time: float
+    fps: float
 
 
     def __init__(self, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self.sim = Simulation()
-        self.rend = SimulationRenderer(self.sim)
 
-        init_size = (self.size.height, self.size.width)
-        self.rend.resize(init_size)
+        # Initialize parent class.
+        super().__init__(**kwargs)
+
+        # Initalize simulation, renderer, and view.
+        self.sim = Simulation()
+        self.rend = Renderer()
+
+        # Initialize start flag.
+        self.started = False
+
+        # Initialize time and fps.
+        self.time = time()
+        self.fps = FPS
 
 
     def on_mount(self) -> None:
-        self.set_interval(1 / 60, self.tick)
+
+        # Call tick at target fps.
+        self.set_interval(1 / FPS, self.on_tick)
 
 
-    def tick(self) -> None:
+    def on_tick(self) -> None:
+
+        # Update simulation.
         self.sim.update()
-        self.rend.render()
+
+        # Render simulation and cache view.
+        self.rend.render_bodies(self.sim.bodies)
+        self.rend.update()
+
+        # Refresh widget.
         self.refresh()
+
+        # Update time and fps.
+        latest = time()
+        elapsed = latest - self.time
+        self.time = latest
+        self.fps = 1 / elapsed
 
 
     def on_resize(self, event: Resize) -> None:
+
+        # Get resize shape.
         size = (event.size.height, event.size.width)
+
+        # Resize display in renderer.
         self.rend.resize(size)
 
-        def on_first_resize():
-            self.sim.bodies = initialize_bodies(size)
-            self.sim.stars = initialize_stars(size)
+        # Check if this is the first resize and call start if it is.
+        if not self.started:
+            self.on_start()
 
-        if not self._initialized_size:
-            on_first_resize()
-            self._initialized_size = True
-
+        # Refresh widget.
         self.refresh()
 
 
-    def render_line(self, y: int) -> Strip:
-        if y >= self.rend.disp.size[0]:
-            return Strip.blank(self.size.width, Style(bgcolor="#000000"))
+    def on_start(self) -> None:
 
-        line = self.rend.disp[y]
-        segs = [Segment(px.char, Style(bgcolor="#000000", color=px.color)) for px in line.pixels]
-        return Strip(segs).simplify()
+        # Get screen size.
+        size = self.size.height, self.size.width
+
+        # Initialize simulation bodies.
+        self.sim.init_bodies(size)
+
+        # Reset start flag.
+        self.started = True
+
+
+    def render_line(self, y: int) -> Strip:
+
+        # Render FPS Counter.
+        if y == 0:
+            return Strip([Segment(f"FPS: {self.fps}", Style(color="#000000", bgcolor="#ffffff"))])
+
+        # Get display size.
+        h, w = self.rend.disp.size
+
+        # Skip line if not inbounds.
+        if w == 0 or not 0 <= y < h:
+            return Strip.blank(w)
+
+        # Get pixels and colors from view.
+        pixels, colors = self.rend.view[0][y], self.rend.view[1][y]
+
+        # Group runs of same color.
+        bounds = np.flatnonzero(np.diff(colors)) + 1
+        starts = np.concatenate(([0], bounds))
+        ends = np.concatenate((bounds, [w]))
+
+        # Breakdown pixels into segments.
+        segs = []
+        for start, end in zip(starts, ends):
+            text = ''.join(pixels[start:end])
+            style = Style(color=f"#{colors[start]:06x}", bgcolor="#000000")
+            segs.append(Segment(text, style))
+
+        return Strip(segs)
 
 
 class ThreeBodyApp(App):
-    def on_mount(self) -> None:
-        self.screen.styles.background = "#000000"
-
-
     def compose(self) -> ComposeResult:
         yield SimulationWidget()
 
