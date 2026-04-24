@@ -1,17 +1,27 @@
 import math
 import random
+import numpy as np
 from dataclasses import dataclass
 
 
+# Physics Configuration
 GRAV_CONST = 5
 DT_BASE = 1
 SOFTENING = 2
 
+# Bodies Configuration
+RADIUS_MIN = 1
+RADIUS_MAX = 10
 TONES = [
     0xff0000,
     0x00ff00,
     0x0000ff,
 ]
+
+# Stars Configuration
+AVG_DIST_BETWEEN_STARS = 5
+TWINKLE_AMPLITUDE = 0.1
+TWINKLE_SPEED_MAX = 0.4
 
 
 @dataclass
@@ -180,28 +190,101 @@ class Simulation:
         self.shooters = []
 
 
-    def init_bodies(self, bounds: tuple[int, int]) -> None:
+    def start(self, bounds: tuple[int, int]) -> None:
+
+        # Set the initial bounds.
+        self.bounds = bounds
+
+        # Call start for each component in the simulation.
+        self._start_bodies()
+        self._start_stars()
+
+
+    def update(self) -> None:
+
+        # Skip if the simulation is paused.
+        if not self.settings.paused:
+
+            # Calculate the delta time.
+            sub_steps = max(1, int(4 * self.settings.speed_mult))
+            dt = DT_BASE * self.settings.speed_mult / sub_steps
+
+            # Call update for each component in the simulation.
+            self._update_bodies(dt)
+            self._update_stars(dt)
+            self._update_shooters(dt)
+
+            # Increment the step count.
+            self.step += 1
+
+
+    def new_stars(self, msize: tuple[int, int], nsize: tuple[int, int]) -> None:
+
+        # Unpack size tuples.
+        my, mx = msize
+        ny, nx = nsize
+
+        # Calculate differences in size and sktip if no dimension is larger.
+        dy, dx = (ny - my, nx - mx)
+        if dy <= 0 and dx <= 0:
+            return
+
+        # Initialize numpy array of random star positions.
+        pos = np.array([[], []])
+
+        # Handle the case where height is increased.
+        if dy > 0:
+            n0 = (dy * mx) // AVG_DIST_BETWEEN_STARS
+            p0 = np.zeros((2, n0), dtype=np.float32)
+            p0[0, :] = (np.random.rand(1, n0) * dy) + my
+            p0[1, :] = np.random.rand(1, n0) * mx
+            pos = np.hstack((pos, p0), dtype=np.float32)
+
+        # Handle the case where width is increased.
+        if dx > 0:
+            n1 = (dx * my) // AVG_DIST_BETWEEN_STARS
+            p1 = np.zeros((2, n1), dtype=np.float32)
+            p1[0, :] = np.random.rand(1, n1) * my
+            p1[1, :] = (np.random.rand(1, n1) * dx) + mx
+            pos = np.hstack((pos, p1), dtype=np.float32)
+
+        # Handle the case where both are increased.
+        if dy > 0 and dx > 0:
+            n2 = (dx * dy) // AVG_DIST_BETWEEN_STARS
+
+
+
+    def _start_bodies(self) -> None:
         for i in range(3):
             self.bodies.append(Body(
-                pos=Vec.rand((0, bounds[1]), (0, bounds[0])),
+                pos=Vec.rand((0, self.bounds[1]), (0, self.bounds[0])),
                 vel=Vec.zeros(),
                 acc=Vec.zeros(),
                 mass=1,
+                # rad=random.uniform(RADIUS_MIN, RADIUS_MAX),
                 rad=7,
                 tone=TONES[i],
             ))
 
 
-    def update(self) -> None:
-        if not self.settings.paused:
-            sub_steps = max(1, int(4 * self.settings.speed_mult))
-            dt = DT_BASE * self.settings.speed_mult / sub_steps
+    def _start_stars(self) -> None:
 
-            self._update_bodies(dt)
-            self._update_stars(dt)
-            self._update_shooters(dt)
+        # Calculate total number of stars.
+        n = (self.bounds[0] * self.bounds[1]) // AVG_DIST_BETWEEN_STARS**2
 
-            self.step += 1
+        # Generate random stars.
+        for _ in range(n):
+            self.stars.append(Star(
+                pos=Vec.rand((0, self.bounds[1]), (0, self.bounds[0])),
+                lum=random.uniform(0, 1),
+                size=random.uniform(0, 1),
+                twinkle=Star.Twinkle(
+                    amplitude=TWINKLE_AMPLITUDE,
+                    speed=random.uniform(0, TWINKLE_SPEED_MAX),
+                    phase=random.uniform(0, math.pi),
+                    shine=0,
+                )
+            ))
 
 
     def _update_acc(self) -> None:

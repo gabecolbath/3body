@@ -14,7 +14,6 @@ from rich.segment import Segment
 from rich.style import Style
 
 
-
 FPS = 60
 
 
@@ -34,7 +33,7 @@ class SimulationWidget(Widget):
 
         # Initalize simulation, renderer, and view.
         self.sim = Simulation()
-        self.rend = Renderer()
+        self.rend = Renderer(self.sim)
 
         # Initialize start flag.
         self.started = False
@@ -56,7 +55,8 @@ class SimulationWidget(Widget):
         self.sim.update()
 
         # Render simulation and cache view.
-        self.rend.render_bodies(self.sim.bodies)
+        self.rend.render_bodies()
+        self.rend.render_stars()
         self.rend.update()
 
         # Refresh widget.
@@ -90,8 +90,11 @@ class SimulationWidget(Widget):
         # Get screen size.
         size = self.size.height, self.size.width
 
-        # Initialize simulation bodies.
-        self.sim.init_bodies(size)
+        # Initialize simulation.
+        self.sim.start(size)
+
+        # Start rendering.
+        self.rend.start()
 
         # Reset start flag.
         self.started = True
@@ -101,7 +104,7 @@ class SimulationWidget(Widget):
 
         # Render FPS Counter.
         if y == 0:
-            return Strip([Segment(f"FPS: {self.fps}", Style(color="#000000", bgcolor="#ffffff"))])
+            return Strip([Segment(f"FPS: {self.fps:02}", Style(color="#ff0000", bgcolor="#000000"))], self.size.width)
 
         # Get display size.
         h, w = self.rend.disp.size
