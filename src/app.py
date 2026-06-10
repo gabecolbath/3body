@@ -2,7 +2,7 @@ import numpy as np
 from time import time
 
 from display import Display
-from render import Renderer
+from render import LAYER_STARS, Renderer
 from sim import Simulation
 
 
@@ -74,12 +74,19 @@ class SimulationWidget(Widget):
         # Get resize shape.
         size = (event.size.height, event.size.width)
 
+        # Resize simulation.
+        self.sim.resize(size)
+
         # Resize display in renderer.
         self.rend.resize(size)
 
-        # Check if this is the first resize and call start if it is.
+        # Check if this is the first resize and call start if it is and reset stars if not.
         if not self.started:
             self.on_start()
+        else:
+            self.sim.stars.clear()
+            self.sim.start_stars()
+            self.rend.disp.clear(LAYER_STARS)
 
         # Refresh widget.
         self.refresh()

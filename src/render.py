@@ -19,7 +19,6 @@ class Renderer:
     view: View
     dots: Dots
     sim: Simulation
-    msize: tuple[int, int]
 
 
     def __init__(self, sim: Simulation) -> None:
@@ -34,11 +33,6 @@ class Renderer:
         self.disp.resize(size)
         self.dots.resize(size)
         self.view = self.disp.composite()
-
-        # Set new maximum size.
-        sy, sx = size
-        msy, msx = self.msize
-        self.msize = (max(sy, msy), max(sx, msx))
 
 
     def start(self) -> None:

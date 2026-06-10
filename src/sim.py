@@ -180,6 +180,7 @@ class Simulation:
     bodies: list[Body]
     stars: list[Star]
     shooters: list[Shooter]
+    bounds: tuple[int, int]
     settings: Settings = Settings()
     step: int = 0
 
@@ -196,8 +197,12 @@ class Simulation:
         self.bounds = bounds
 
         # Call start for each component in the simulation.
-        self._start_bodies()
-        self._start_stars()
+        self.start_bodies()
+        self.start_stars()
+
+
+    def resize(self, bounds: tuple[int, int]) -> None:
+        self.bounds = bounds
 
 
     def update(self) -> None:
@@ -210,51 +215,15 @@ class Simulation:
             dt = DT_BASE * self.settings.speed_mult / sub_steps
 
             # Call update for each component in the simulation.
-            self._update_bodies(dt)
-            self._update_stars(dt)
-            self._update_shooters(dt)
+            self.update_bodies(dt)
+            self.update_stars(dt)
+            self.update_shooters(dt)
 
             # Increment the step count.
             self.step += 1
 
 
-    def new_stars(self, msize: tuple[int, int], nsize: tuple[int, int]) -> None:
-
-        # Unpack size tuples.
-        my, mx = msize
-        ny, nx = nsize
-
-        # Calculate differences in size and sktip if no dimension is larger.
-        dy, dx = (ny - my, nx - mx)
-        if dy <= 0 and dx <= 0:
-            return
-
-        # Initialize numpy array of random star positions.
-        pos = np.array([[], []])
-
-        # Handle the case where height is increased.
-        if dy > 0:
-            n0 = (dy * mx) // AVG_DIST_BETWEEN_STARS
-            p0 = np.zeros((2, n0), dtype=np.float32)
-            p0[0, :] = (np.random.rand(1, n0) * dy) + my
-            p0[1, :] = np.random.rand(1, n0) * mx
-            pos = np.hstack((pos, p0), dtype=np.float32)
-
-        # Handle the case where width is increased.
-        if dx > 0:
-            n1 = (dx * my) // AVG_DIST_BETWEEN_STARS
-            p1 = np.zeros((2, n1), dtype=np.float32)
-            p1[0, :] = np.random.rand(1, n1) * my
-            p1[1, :] = (np.random.rand(1, n1) * dx) + mx
-            pos = np.hstack((pos, p1), dtype=np.float32)
-
-        # Handle the case where both are increased.
-        if dy > 0 and dx > 0:
-            n2 = (dx * dy) // AVG_DIST_BETWEEN_STARS
-
-
-
-    def _start_bodies(self) -> None:
+    def start_bodies(self) -> None:
         for i in range(3):
             self.bodies.append(Body(
                 pos=Vec.rand((0, self.bounds[1]), (0, self.bounds[0])),
@@ -267,7 +236,7 @@ class Simulation:
             ))
 
 
-    def _start_stars(self) -> None:
+    def start_stars(self) -> None:
 
         # Calculate total number of stars.
         n = (self.bounds[0] * self.bounds[1]) // AVG_DIST_BETWEEN_STARS**2
@@ -287,7 +256,7 @@ class Simulation:
             ))
 
 
-    def _update_acc(self) -> None:
+    def update_acc(self) -> None:
         # Skip if these is one or less body.
         if len(self.bodies) <= 1:
             return
@@ -307,9 +276,9 @@ class Simulation:
                 bod1.acc -= f * bod0.mass * delta
 
 
-    def _update_bodies(self, dt: float) -> None:
+    def update_bodies(self, dt: float) -> None:
         # First update to accelerations.
-        self._update_acc()
+        self.update_acc()
 
         # Half-step velocities and update positions.
         for bod in self.bodies:
@@ -317,14 +286,14 @@ class Simulation:
             bod.pos += dt * bod.vel
 
         # Second update to accelerations.
-        self._update_acc()
+        self.update_acc()
 
         # Half-step velocities.
         for bod in self.bodies:
             bod.vel += 0.5 * dt * bod.acc
 
 
-    def _update_stars(self, dt: float) -> None:
+    def update_stars(self, dt: float) -> None:
         # Calculate current time.
         t = dt * self.step
 
@@ -336,7 +305,7 @@ class Simulation:
             star.twinkle.shine = amplitude * math.sin((speed * t) + phase)
 
 
-    def _update_shooters(self, dt: float) -> None:
+    def update_shooters(self, dt: float) -> None:
         # Update positions.
         for shooter in self.shooters:
             shooter.pos += dt * shooter.vel
